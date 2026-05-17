@@ -205,6 +205,8 @@ app.post('/extract-youtube', express.json({ limit: '32kb' }), async (req, res) =
       errYoutubeTranscriptUnavailable: 'Captions are unavailable for this video.',
       errYoutubeAudioFallbackFailed:
         'Audio transcription failed for this YouTube video.',
+      missing_groq_api_key:
+        'Audio transcription is not configured on the server (GROQ_API_KEY missing).',
       errYoutubeAudioTranscriptionFailed:
         'Audio transcription failed for this YouTube video.',
       errYoutubeBotVerificationRequired:
@@ -218,7 +220,10 @@ app.post('/extract-youtube', express.json({ limit: '32kb' }), async (req, res) =
       res,
       status,
       code,
-      messages[code] ?? messages.errYoutubeAnalysisFailed,
+      messages[code] ??
+        (err.reason === 'missing_groq_api_key'
+          ? messages.missing_groq_api_key
+          : messages.errYoutubeAnalysisFailed),
       {
         stage: err.stage,
         videoId: err.videoId,
