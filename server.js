@@ -1,30 +1,29 @@
 const express = require('express');
 const cors = require('cors');
-const multer = require('multer');
 const pdfParse = require('pdf-parse');
 
 const app = express();
-const upload = multer({ storage: multer.memoryStorage() });
 
 app.use(cors());
-app.use(express.json());
 
 app.get('/', (req, res) => {
   res.json({ status: 'Summify backend running' });
 });
 
-app.post('/extract-pdf', upload.single('file'), async (req, res) => {
+app.post('/extract-pdf', express.json({ limit: '50mb' }), async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
+    const { base64 } = req.body;
+    if (!base64) {
+      return res.status(400).json({ error: 'No base64 data provided' });
     }
 
-    const data = await pdfParse(req.file.buffer);
+    const buffer = Buffer.from(base64, 'base64');
+    const data = await pdfParse(buffer);
     const text = data.text?.trim();
 
     if (!text || text.length < 100) {
-      return res.status(422).json({ 
-        error: 'Could not extract text from this PDF. Please try a text-based PDF or convert to TXT.' 
+      return res.status(422).json({
+        error: 'Could not extract text from this PDF.',
       });
     }
 
