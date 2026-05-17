@@ -3,7 +3,7 @@ const cors = require('cors');
 const pdfParse = require('pdf-parse/lib/pdf-parse.js');
 const { validateArticleUrl, assertSafeUrl } = require('./lib/url-security');
 const { extractArticleFromUrl } = require('./lib/article-extract');
-const { extractYouTubeTranscript } = require('./lib/youtube-extract');
+const { extractYouTubeContent } = require('./lib/youtube-extract');
 
 const app = express();
 
@@ -133,7 +133,7 @@ app.post('/extract-youtube', express.json({ limit: '32kb' }), async (req, res) =
       );
     }
 
-    const result = await extractYouTubeTranscript(url);
+    const result = await extractYouTubeContent(url);
 
     res.json({
       success: true,
@@ -144,30 +144,38 @@ app.post('/extract-youtube', express.json({ limit: '32kb' }), async (req, res) =
       language: result.language,
       sourceDomain: result.sourceDomain,
       text: result.text,
-      segments: result.segments,
+      segments: result.segments ?? [],
       extractedChars: result.extractedChars,
       extractionMethod: result.extractionMethod,
+      transcriptSource: result.transcriptSource ?? 'captions',
     });
   } catch (err) {
-    const code = err.code ?? 'errYoutubeExtractFailed';
+    const code = err.code ?? 'errYoutubeAnalysisFailed';
     const status =
       code === 'errYoutubeInvalidUrl'
         ? 400
-        : code === 'errYoutubeTranscriptUnavailable'
+        : code === 'errYoutubeTooLongForFree'
           ? 422
           : code === 'errYoutubeVideoUnavailable'
             ? 404
-            : 500;
+            : code === 'errYoutubeAnalysisFailed'
+              ? 422
+              : 500;
 
     const messages = {
       errYoutubeInvalidUrl: 'Please enter a valid YouTube URL.',
-      errYoutubeTranscriptUnavailable:
-        'No captions are available for this video.',
+      errYoutubeTooLongForFree: 'This video is too long to analyze on the free tier.',
       errYoutubeVideoUnavailable: 'This video is unavailable.',
-      errYoutubeExtractFailed: 'Could not extract the YouTube transcript.',
+      errYoutubeAnalysisFailed: 'This YouTube video could not be analyzed.',
+      errYoutubeExtractFailed: 'This YouTube video could not be analyzed.',
     };
 
-    sendYoutubeError(res, status, code, messages[code] ?? messages.errYoutubeExtractFailed);
+    sendYoutubeError(
+      res,
+      status,
+      code,
+      messages[code] ?? messages.errYoutubeAnalysisFailed,
+    );
   }
 });
 
