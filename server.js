@@ -3,6 +3,7 @@ const cors = require('cors');
 const pdfParse = require('pdf-parse/lib/pdf-parse.js');
 const { validateArticleUrl, assertSafeUrl } = require('./lib/url-security');
 const { extractArticleFromUrl } = require('./lib/article-extract');
+const { extractYouTubeTranscript } = require('./lib/youtube-extract');
 
 const app = express();
 
@@ -109,6 +110,64 @@ app.post('/extract-article', express.json({ limit: '32kb' }), async (req, res) =
           ? 'This URL could not be opened.'
           : 'Could not extract article text from this page.',
     );
+  }
+});
+
+function sendYoutubeError(res, status, code, message) {
+  res.status(status).json({
+    success: false,
+    error: code,
+    message,
+  });
+}
+
+app.post('/extract-youtube', express.json({ limit: '32kb' }), async (req, res) => {
+  try {
+    const { url } = req.body ?? {};
+    if (!url || typeof url !== 'string') {
+      return sendYoutubeError(
+        res,
+        400,
+        'errYoutubeInvalidUrl',
+        'A valid YouTube URL is required.',
+      );
+    }
+
+    const result = await extractYouTubeTranscript(url);
+
+    res.json({
+      success: true,
+      videoId: result.videoId,
+      title: result.title,
+      channel: result.channel ?? null,
+      duration: result.duration ?? null,
+      language: result.language,
+      sourceDomain: result.sourceDomain,
+      text: result.text,
+      segments: result.segments,
+      extractedChars: result.extractedChars,
+      extractionMethod: result.extractionMethod,
+    });
+  } catch (err) {
+    const code = err.code ?? 'errYoutubeExtractFailed';
+    const status =
+      code === 'errYoutubeInvalidUrl'
+        ? 400
+        : code === 'errYoutubeTranscriptUnavailable'
+          ? 422
+          : code === 'errYoutubeVideoUnavailable'
+            ? 404
+            : 500;
+
+    const messages = {
+      errYoutubeInvalidUrl: 'Please enter a valid YouTube URL.',
+      errYoutubeTranscriptUnavailable:
+        'No captions are available for this video.',
+      errYoutubeVideoUnavailable: 'This video is unavailable.',
+      errYoutubeExtractFailed: 'Could not extract the YouTube transcript.',
+    };
+
+    sendYoutubeError(res, status, code, messages[code] ?? messages.errYoutubeExtractFailed);
   }
 });
 
