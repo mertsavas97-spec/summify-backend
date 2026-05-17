@@ -1,3 +1,7 @@
+const { updateYtDlp, getYtDlpVersion } = require('./lib/yt-dlp-update');
+
+updateYtDlp();
+
 const express = require('express');
 const cors = require('cors');
 const pdfParse = require('pdf-parse/lib/pdf-parse.js');
@@ -28,6 +32,15 @@ app.get('/version', (req, res) => {
     youtubeCookiesSource: getYouTubeCookiesSource(),
     nodeEnv: process.env.NODE_ENV || 'unknown',
   });
+});
+
+app.get('/yt-dlp-version', (req, res) => {
+  try {
+    const version = getYtDlpVersion();
+    res.json({ version });
+  } catch (error) {
+    res.json({ error: error.message });
+  }
 });
 
 app.post('/extract-pdf', express.json({ limit: '50mb' }), async (req, res) => {
