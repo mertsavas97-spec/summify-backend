@@ -1,9 +1,7 @@
 const express = require('express');
 const cors = require('cors');
-const pdfParse = require('pdf-parse/lib/pdf-parse.js');
 
 const app = express();
-
 app.use(cors());
 
 app.get('/', (req, res) => {
@@ -18,6 +16,8 @@ app.post('/extract-pdf', express.json({ limit: '50mb' }), async (req, res) => {
     }
 
     const buffer = Buffer.from(base64, 'base64');
+    
+    const { default: pdfParse } = await import('pdf-parse');
     const data = await pdfParse(buffer);
     const text = data.text?.trim();
 
