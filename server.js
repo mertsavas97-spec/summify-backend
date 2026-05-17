@@ -4,6 +4,10 @@ const pdfParse = require('pdf-parse/lib/pdf-parse.js');
 const { validateArticleUrl, assertSafeUrl } = require('./lib/url-security');
 const { extractArticleFromUrl } = require('./lib/article-extract');
 const { extractYouTubeContent } = require('./lib/youtube-extract');
+const {
+  initYouTubeCookies,
+  getYouTubeCookiesSource,
+} = require('./lib/youtube-cookies');
 
 const app = express();
 const SERVER_STARTED_AT = new Date().toISOString();
@@ -21,6 +25,7 @@ app.get('/version', (req, res) => {
     commit: process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || 'unknown',
     startedAt: SERVER_STARTED_AT,
     youtubeAudioFallbackVersion: 'ytdlp-nodejs-v2',
+    youtubeCookiesSource: getYouTubeCookiesSource(),
     nodeEnv: process.env.NODE_ENV || 'unknown',
   });
 });
@@ -185,7 +190,9 @@ app.post('/extract-youtube', express.json({ limit: '32kb' }), async (req, res) =
             ? 404
             : code === 'errYoutubeNetworkTimeout'
               ? 504
-              : 422;
+              : code === 'errYoutubeBotVerificationRequired'
+                ? 422
+                : 422;
 
     const messages = {
       errYoutubeInvalidUrl: 'Please enter a valid YouTube URL.',
@@ -200,6 +207,8 @@ app.post('/extract-youtube', express.json({ limit: '32kb' }), async (req, res) =
         'Audio transcription failed for this YouTube video.',
       errYoutubeAudioTranscriptionFailed:
         'Audio transcription failed for this YouTube video.',
+      errYoutubeBotVerificationRequired:
+        'YouTube requires verification for this video. Configure cookies or try another video.',
       errYoutubeNetworkTimeout: 'YouTube extraction timed out. Check your connection and retry.',
       errYoutubeAnalysisFailed:
         'Captions and audio transcription both failed for this video.',
@@ -222,11 +231,24 @@ app.post('/extract-youtube', express.json({ limit: '32kb' }), async (req, res) =
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log('[SummifyBackend] backend_version_loaded', {
-    commit: process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || 'unknown',
-    youtubeAudioFallbackVersion: 'ytdlp-nodejs-v2',
-    startedAt: SERVER_STARTED_AT,
+
+initYouTubeCookies()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+      console.log('[SummifyBackend] backend_version_loaded', {
+        commit: process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || 'unknown',
+        youtubeAudioFallbackVersion: 'ytdlp-nodejs-v2',
+        youtubeCookiesSource: getYouTubeCookiesSource(),
+        startedAt: SERVER_STARTED_AT,
+      });
+    });
+  })
+  .catch((error) => {
+    console.error('[SummifyBackend] youtube_cookies_init_failed', {
+      message: String(error?.message ?? error).slice(0, 200),
+    });
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
   });
-});
