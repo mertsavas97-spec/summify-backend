@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const pdfParse = require('pdf-parse');
+const pdfParse = require('pdf-parse/lib/pdf-parse.js');
 
 const app = express();
 
