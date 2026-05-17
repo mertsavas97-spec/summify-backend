@@ -6,11 +6,23 @@ const { extractArticleFromUrl } = require('./lib/article-extract');
 const { extractYouTubeContent } = require('./lib/youtube-extract');
 
 const app = express();
+const SERVER_STARTED_AT = new Date().toISOString();
 
 app.use(cors());
 
 app.get('/', (req, res) => {
   res.json({ status: 'Summify backend running' });
+});
+
+app.get('/version', (req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'summify-backend',
+    commit: process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || 'unknown',
+    startedAt: SERVER_STARTED_AT,
+    youtubeAudioFallbackVersion: 'ytdlp-nodejs-v2',
+    nodeEnv: process.env.NODE_ENV || 'unknown',
+  });
 });
 
 app.post('/extract-pdf', express.json({ limit: '50mb' }), async (req, res) => {
@@ -210,4 +222,11 @@ app.post('/extract-youtube', express.json({ limit: '32kb' }), async (req, res) =
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  console.log('[SummifyBackend] backend_version_loaded', {
+    commit: process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || 'unknown',
+    youtubeAudioFallbackVersion: 'ytdlp-nodejs-v2',
+    startedAt: SERVER_STARTED_AT,
+  });
+});
