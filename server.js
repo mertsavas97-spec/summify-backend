@@ -113,11 +113,17 @@ app.post('/extract-article', express.json({ limit: '32kb' }), async (req, res) =
   }
 });
 
-function sendYoutubeError(res, status, code, message) {
+function sendYoutubeError(res, status, code, message, extra = {}) {
   res.status(status).json({
     success: false,
     error: code,
+    errorKey: code,
     message,
+    reason: extra.reason ?? message,
+    stage: extra.stage ?? null,
+    videoId: extra.videoId ?? null,
+    transcriptErrorKey: extra.transcriptErrorKey ?? null,
+    audioErrorKey: extra.audioErrorKey ?? null,
   });
 }
 
@@ -148,26 +154,43 @@ app.post('/extract-youtube', express.json({ limit: '32kb' }), async (req, res) =
       extractedChars: result.extractedChars,
       extractionMethod: result.extractionMethod,
       transcriptSource: result.transcriptSource ?? 'captions',
+      processingTier: result.processingTier ?? 'fast',
+      thumbnail: result.thumbnail ?? null,
     });
   } catch (err) {
-    const code = err.code ?? 'errYoutubeAnalysisFailed';
+    const code =
+      err.code ??
+      err.errorKey ??
+      'errYoutubeAnalysisFailed';
     const status =
       code === 'errYoutubeInvalidUrl'
         ? 400
-        : code === 'errYoutubeTooLongForFree'
+        : code === 'errYoutubeVideoTooLong' || code === 'errYoutubeTooLongForFree'
           ? 422
-          : code === 'errYoutubeVideoUnavailable'
+          : code === 'errYoutubeVideoUnavailable' ||
+              code === 'errYoutubeAgeRestricted' ||
+              code === 'errYoutubeRegionBlocked'
             ? 404
-            : code === 'errYoutubeAnalysisFailed'
-              ? 422
-              : 500;
+            : code === 'errYoutubeNetworkTimeout'
+              ? 504
+              : 422;
 
     const messages = {
       errYoutubeInvalidUrl: 'Please enter a valid YouTube URL.',
       errYoutubeTooLongForFree: 'This video is too long to analyze on the free tier.',
-      errYoutubeVideoUnavailable: 'This video is unavailable.',
-      errYoutubeAnalysisFailed: 'This YouTube video could not be analyzed.',
-      errYoutubeExtractFailed: 'This YouTube video could not be analyzed.',
+      errYoutubeVideoTooLong:
+        'This video is longer than 60 minutes. Try a shorter video for now.',
+      errYoutubeVideoUnavailable: 'This video is unavailable or private.',
+      errYoutubeAgeRestricted: 'This video is age-restricted and cannot be analyzed.',
+      errYoutubeRegionBlocked: 'This video is not available in your region.',
+      errYoutubeTranscriptUnavailable: 'Captions are unavailable for this video.',
+      errYoutubeAudioFallbackFailed:
+        'Audio transcription failed for this YouTube video.',
+      errYoutubeAudioTranscriptionFailed:
+        'Audio transcription failed for this YouTube video.',
+      errYoutubeNetworkTimeout: 'YouTube extraction timed out. Check your connection and retry.',
+      errYoutubeAnalysisFailed:
+        'Captions and audio transcription both failed for this video.',
     };
 
     sendYoutubeError(
@@ -175,6 +198,13 @@ app.post('/extract-youtube', express.json({ limit: '32kb' }), async (req, res) =
       status,
       code,
       messages[code] ?? messages.errYoutubeAnalysisFailed,
+      {
+        stage: err.stage,
+        videoId: err.videoId,
+        reason: err.reason,
+        transcriptErrorKey: err.transcriptErrorKey,
+        audioErrorKey: err.audioErrorKey,
+      },
     );
   }
 });
